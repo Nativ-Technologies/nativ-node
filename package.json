@@ -1,5 +1,5 @@
 {
-  "name": "nativ",
+  "name": "nativ-sdk",
   "version": "0.1.0",
   "description": "Node.js/TypeScript SDK for the Nativ AI localization platform",
   "type": "module",
@@ -42,7 +42,7 @@
     "nativ",
     "culturalization"
   ],
-  "author": "Nativ <hello@usenativ.com>",
+  "author": "Nativ <founders@usenativ.com>",
   "license": "MIT",
   "repository": {
     "type": "git",

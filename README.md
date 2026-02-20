@@ -7,13 +7,13 @@ Wraps the full Nativ REST API with **TypeScript types**, zero runtime dependenci
 ## Installation
 
 ```bash
-npm install nativ
+npm install nativ-sdk
 ```
 
 ## Quick start
 
 ```typescript
-import { Nativ } from "nativ";
+import { Nativ } from "nativ-sdk";
 
 const client = new Nativ({ apiKey: "nativ_..." }); // or set NATIV_API_KEY env var
 
@@ -148,7 +148,7 @@ await client.createStyleGuide(
 ## Error handling
 
 ```typescript
-import { Nativ, InsufficientCreditsError, AuthenticationError } from "nativ";
+import { Nativ, InsufficientCreditsError, AuthenticationError } from "nativ-sdk";
 
 const client = new Nativ();
 

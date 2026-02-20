@@ -3,7 +3,7 @@
  *
  * @example
  * ```ts
- * import { Nativ } from "nativ";
+ * import { Nativ } from "nativ-sdk";
  *
  * const client = new Nativ();  // reads NATIV_API_KEY from env
  * const result = await client.translate("Hello world", "French");

@@ -1,0 +1,63 @@
+{
+  "name": "nativ",
+  "version": "0.1.0",
+  "description": "Node.js/TypeScript SDK for the Nativ AI localization platform",
+  "type": "module",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "npm run build:esm && npm run build:cjs && npm run build:cjs-pkg",
+    "build:esm": "tsc -p tsconfig.build.json",
+    "build:cjs": "tsc -p tsconfig.cjs.json",
+    "build:cjs-pkg": "echo '{\"type\":\"commonjs\"}' > dist/cjs/package.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "localization",
+    "translation",
+    "i18n",
+    "l10n",
+    "ai",
+    "nativ",
+    "culturalization"
+  ],
+  "author": "Nativ <hello@usenativ.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Nativ-Technologies/nativ-node.git"
+  },
+  "homepage": "https://usenativ.com",
+  "bugs": {
+    "url": "https://github.com/Nativ-Technologies/nativ-node/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.5",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

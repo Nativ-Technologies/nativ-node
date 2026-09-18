@@ -11,13 +11,24 @@ import {
   ValidationError,
 } from "./errors.js";
 import type {
+  AudioConsentScript,
+  AudioPreview,
+  AudioSynthesis,
+  AudioTranscript,
+  AudioVoices,
   BrandVoice,
+  ClonedVoice,
   CulturalInspection,
   FileInput,
   ImageResult,
   Language,
+  LocalizeSubtitlesOptions,
   OCRResult,
+  RemuxedVideo,
   StyleGuide,
+  SubtitleParse,
+  SubtitlePlayground,
+  SynthesizeAudioOptions,
   TMEntry,
   TMEntryList,
   TMSearchMatch,
@@ -27,11 +38,19 @@ import type {
   Translation,
 } from "./types.js";
 import {
+  parseAudioPreview,
+  parseAudioSynthesis,
+  parseAudioTranscript,
+  parseAudioVoices,
   parseBrandVoice,
+  parseClonedVoice,
+  parseConsentScript,
   parseImageResult,
   parseInspection,
   parseLanguages,
   parseStyleGuide,
+  parseSubtitleParse,
+  parseSubtitlePlayground,
   parseTMEntry,
   parseTMList,
   parseTMSearch,
@@ -135,6 +154,20 @@ function guessContentType(filename: string): string {
     bmp: "image/bmp",
     tiff: "image/tiff",
     pdf: "application/pdf",
+    wav: "audio/wav",
+    mp3: "audio/mpeg",
+    m4a: "audio/mp4",
+    aac: "audio/aac",
+    ogg: "audio/ogg",
+    flac: "audio/flac",
+    mp4: "video/mp4",
+    mov: "video/quicktime",
+    mkv: "video/x-matroska",
+    webm: "video/webm",
+    srt: "application/x-subrip",
+    itt: "application/xml",
+    txt: "text/plain",
+    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   };
   return map[ext ?? ""] ?? "application/octet-stream";
 }
@@ -175,14 +208,19 @@ export class Nativ {
     path: string,
     options?: {
       json?: Record<string, unknown>;
-      params?: Record<string, string | number | boolean>;
+      params?: Record<string, string | number | boolean | string[]>;
       formData?: FormData;
+      timeout?: number;
     },
   ): Promise<Record<string, unknown>> {
     const url = new URL(path, this.baseUrl);
     if (options?.params) {
       for (const [k, v] of Object.entries(options.params)) {
-        url.searchParams.set(k, String(v));
+        if (Array.isArray(v)) {
+          for (const item of v) url.searchParams.append(k, String(item));
+        } else {
+          url.searchParams.set(k, String(v));
+        }
       }
     }
 
@@ -199,8 +237,9 @@ export class Nativ {
       body = JSON.stringify(options.json);
     }
 
+    const timeout = options?.timeout ?? this.timeout;
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.timeout);
+    const timer = setTimeout(() => controller.abort(), timeout);
 
     try {
       const resp = await fetch(url.toString(), {
@@ -579,5 +618,312 @@ export class Nativ {
     approved?: boolean;
   }): Promise<Record<string, unknown>> {
     return this.request("POST", "/text/feedback", { json: feedback });
+  }
+
+  // -------------------------------------------------------------------
+  // Audio / video / subtitles
+  // -------------------------------------------------------------------
+
+  private async formFile(
+    file: FileInput,
+    field: string,
+    fallbackName: string,
+  ): Promise<FormData> {
+    const resolved = await resolveFile(file);
+    const filename = resolved.filename || fallbackName;
+    const form = new FormData();
+    form.append(
+      field,
+      new Blob([resolved.data.buffer as ArrayBuffer], { type: resolved.contentType }),
+      filename,
+    );
+    return form;
+  }
+
+  async transcribeAudio(
+    file: FileInput,
+    options?: { sourceLanguageCode?: string; keepBackgroundMusic?: boolean },
+  ): Promise<AudioTranscript> {
+    const form = await this.formFile(file, "file", "audio.wav");
+    if (options?.sourceLanguageCode) {
+      form.append("source_language_code", options.sourceLanguageCode);
+    }
+    form.append(
+      "keep_background_music",
+      String(options?.keepBackgroundMusic ?? false),
+    );
+    const data = await this.request("POST", "/audio/transcribe", {
+      formData: form,
+      timeout: 300_000,
+    });
+    return parseAudioTranscript(data);
+  }
+
+  async parseAudioScript(file: FileInput): Promise<AudioTranscript> {
+    const form = await this.formFile(file, "file", "script.txt");
+    const data = await this.request("POST", "/audio/script", {
+      formData: form,
+      timeout: 300_000,
+    });
+    return parseAudioTranscript(data);
+  }
+
+  async registerVideo(file: FileInput): Promise<string> {
+    const form = await this.formFile(file, "file", "video.mp4");
+    const data = await this.request("POST", "/audio/video/register", {
+      formData: form,
+      timeout: 300_000,
+    });
+    return String(data.video_id ?? "");
+  }
+
+  async listVoices(options?: { languageCode?: string }): Promise<AudioVoices> {
+    const params: Record<string, string> = {};
+    if (options?.languageCode) params.language_code = options.languageCode;
+    const data = await this.request("GET", "/audio/voices", {
+      params: Object.keys(params).length ? params : undefined,
+    });
+    return parseAudioVoices(data);
+  }
+
+  async previewVoice(
+    voiceId: string,
+    options?: { languageCode?: string; text?: string },
+  ): Promise<AudioPreview> {
+    const json: Record<string, unknown> = { voice_id: voiceId };
+    if (options?.languageCode) json.language_code = options.languageCode;
+    if (options?.text) json.text = options.text;
+    const data = await this.request("POST", "/audio/voices/preview", { json });
+    return parseAudioPreview(data);
+  }
+
+  async getVoiceConsentScript(options?: {
+    languageCode?: string;
+  }): Promise<AudioConsentScript> {
+    const params: Record<string, string> = {};
+    if (options?.languageCode) params.language_code = options.languageCode;
+    const data = await this.request("GET", "/audio/voices/consent-script", {
+      params: Object.keys(params).length ? params : undefined,
+    });
+    return parseConsentScript(data);
+  }
+
+  async cloneVoice(
+    reference: FileInput,
+    consent: FileInput,
+    options?: { languageCode?: string },
+  ): Promise<ClonedVoice> {
+    const ref = await resolveFile(reference);
+    const con = await resolveFile(consent);
+    const form = new FormData();
+    form.append(
+      "reference",
+      new Blob([ref.data.buffer as ArrayBuffer], { type: ref.contentType }),
+      ref.filename || "reference.wav",
+    );
+    form.append(
+      "consent",
+      new Blob([con.data.buffer as ArrayBuffer], { type: con.contentType }),
+      con.filename || "consent.wav",
+    );
+    if (options?.languageCode) form.append("language_code", options.languageCode);
+    const data = await this.request("POST", "/audio/voices/clone", {
+      formData: form,
+      timeout: 300_000,
+    });
+    return parseClonedVoice(data);
+  }
+
+  async createByoVoice(
+    reference: FileInput,
+    options?: {
+      consent?: FileInput;
+      name?: string;
+      languageCode?: string;
+      confirmOwnership?: boolean;
+      clipReference?: boolean;
+    },
+  ): Promise<ClonedVoice> {
+    const ref = await resolveFile(reference);
+    const form = new FormData();
+    form.append(
+      "reference",
+      new Blob([ref.data.buffer as ArrayBuffer], { type: ref.contentType }),
+      ref.filename || "sample.wav",
+    );
+    if (options?.consent) {
+      const con = await resolveFile(options.consent);
+      form.append(
+        "consent",
+        new Blob([con.data.buffer as ArrayBuffer], { type: con.contentType }),
+        con.filename || "consent.wav",
+      );
+    }
+    if (options?.name) form.append("name", options.name);
+    if (options?.languageCode) form.append("language_code", options.languageCode);
+    form.append("confirm_ownership", String(options?.confirmOwnership ?? false));
+    form.append("clip_reference", String(options?.clipReference ?? false));
+    const data = await this.request("POST", "/audio/voices/byo", {
+      formData: form,
+      timeout: 300_000,
+    });
+    return parseClonedVoice(data);
+  }
+
+  async deleteSavedVoice(voiceId: string): Promise<Record<string, unknown>> {
+    return this.request("DELETE", "/audio/voices/saved", {
+      params: { voice_id: voiceId },
+    });
+  }
+
+  async synthesizeAudio(
+    options: SynthesizeAudioOptions,
+  ): Promise<AudioSynthesis> {
+    const json: Record<string, unknown> = {
+      language: options.language,
+      language_code: options.languageCode,
+      voice_id: options.voiceId,
+      segments: options.segments,
+      keep_same_length: options.keepSameLength ?? false,
+      keep_background_music: options.keepBackgroundMusic ?? false,
+      source_duration_ms: options.sourceDurationMs ?? 0,
+      tool: options.tool ?? "api",
+    };
+    if (options.stemId) json.stem_id = options.stemId;
+    if (options.sourceTranscript) json.source_transcript = options.sourceTranscript;
+    if (options.videoId) json.video_id = options.videoId;
+    const data = await this.request("POST", "/audio/synthesize", {
+      json,
+      timeout: 300_000,
+    });
+    return parseAudioSynthesis(data);
+  }
+
+  async remuxVideo(
+    videoId: string,
+    audioBase64: string,
+  ): Promise<RemuxedVideo> {
+    const data = await this.request("POST", "/audio/remux-video", {
+      json: { video_id: videoId, audio_base64: audioBase64 },
+      timeout: 300_000,
+    });
+    return {
+      videoBase64: String(data.video_base64 ?? ""),
+      videoMimeType: String(data.video_mime_type ?? "video/mp4"),
+    };
+  }
+
+  async parseSubtitle(file: FileInput): Promise<SubtitleParse> {
+    const form = await this.formFile(file, "file", "subtitles.srt");
+    const data = await this.request("POST", "/subtitle/parse", {
+      formData: form,
+      timeout: 300_000,
+    });
+    return parseSubtitleParse(data);
+  }
+
+  async localizeSubtitles(
+    targetLanguageCodes: string[],
+    options: LocalizeSubtitlesOptions = {},
+  ): Promise<SubtitlePlayground> {
+    const form = new FormData();
+    form.append(
+      "target_language_codes",
+      JSON.stringify(targetLanguageCodes),
+    );
+    form.append("source_language_code", options.sourceLanguageCode ?? "en");
+    form.append("context", options.context ?? "");
+    if (options.formality) form.append("formality", options.formality);
+    if (options.campaignIds) {
+      form.append("campaign_ids", JSON.stringify(options.campaignIds));
+    }
+    if (options.subtitle) {
+      const f = await resolveFile(options.subtitle);
+      form.append(
+        "subtitle",
+        new Blob([f.data.buffer as ArrayBuffer], { type: f.contentType }),
+        f.filename || "subtitles.srt",
+      );
+    }
+    if (options.video) {
+      const f = await resolveFile(options.video);
+      form.append(
+        "video",
+        new Blob([f.data.buffer as ArrayBuffer], { type: f.contentType }),
+        f.filename || "video.mp4",
+      );
+    }
+    if (options.glossary) {
+      const f = await resolveFile(options.glossary);
+      form.append(
+        "glossary",
+        new Blob([f.data.buffer as ArrayBuffer], { type: f.contentType }),
+        f.filename || "glossary.csv",
+      );
+    }
+    const data = await this.request("POST", "/subtitle/playground", {
+      formData: form,
+      timeout: 300_000,
+    });
+    return parseSubtitlePlayground(data);
+  }
+
+  async uploadSubtitle(
+    file: FileInput,
+    options?: {
+      autoLocalize?: boolean;
+      targetLanguages?: string[];
+      context?: string;
+      glossary?: string;
+      sourceLanguage?: string;
+    },
+  ): Promise<Record<string, unknown>> {
+    const form = await this.formFile(file, "file", "subtitles.srt");
+    const params: Record<string, string | number | boolean | string[]> = {
+      auto_localize: options?.autoLocalize ?? false,
+    };
+    if (options?.targetLanguages) params.target_languages = options.targetLanguages;
+    if (options?.context) params.context = options.context;
+    if (options?.glossary) params.glossary = options.glossary;
+    if (options?.sourceLanguage) params.source_language = options.sourceLanguage;
+    return this.request("POST", "/subtitle/upload", {
+      formData: form,
+      params,
+      timeout: 300_000,
+    });
+  }
+
+  async listSubtitles(): Promise<Record<string, unknown>> {
+    return this.request("GET", "/subtitle/list");
+  }
+
+  async localizeSubtitleFile(
+    filePath: string,
+    targetLanguages: string[],
+    options?: { context?: string; glossary?: string },
+  ): Promise<Record<string, unknown>> {
+    const json: Record<string, unknown> = {
+      file_path: filePath,
+      target_languages: targetLanguages,
+    };
+    if (options?.context) json.context = options.context;
+    if (options?.glossary) json.glossary = options.glossary;
+    return this.request("POST", "/subtitle/localize", {
+      json,
+      timeout: 300_000,
+    });
+  }
+
+  async getSubtitleDownloadUrl(filePath: string): Promise<string> {
+    const data = await this.request("GET", "/subtitle/download-url", {
+      params: { file_path: filePath },
+    });
+    return String(data.download_url ?? "");
+  }
+
+  async deleteSubtitle(filePath: string): Promise<Record<string, unknown>> {
+    return this.request("DELETE", "/subtitle/delete", {
+      params: { file_path: filePath },
+    });
   }
 }

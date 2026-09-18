@@ -186,6 +186,168 @@ export type FileInput =
   | { data: Buffer | Uint8Array; filename: string; contentType?: string };
 
 // -----------------------------------------------------------------------
+// Audio / video / subtitles
+// -----------------------------------------------------------------------
+
+export interface AudioSegment {
+  id: string;
+  text: string;
+  startMs: number;
+  endMs: number;
+}
+
+export interface AudioTranscript {
+  transcript: string;
+  durationMs: number;
+  segments: AudioSegment[];
+  provider: string;
+  estimatedCreditCost: number;
+  billedSeconds: number;
+  detectedLanguage?: string;
+  stemId?: string;
+  bedMode?: string;
+  videoId?: string;
+  sourceVoiceAudioBase64?: string;
+}
+
+export interface AudioVoice {
+  id: string;
+  name: string;
+  gender: string;
+  locale: string;
+  accentLabel: string;
+  provider: string;
+  category: string;
+}
+
+export interface AudioVoices {
+  voices: AudioVoice[];
+  provider: string;
+}
+
+export interface AudioPreview {
+  audioBase64: string;
+  mimeType: string;
+  durationMs: number;
+  provider: string;
+  voiceId: string;
+}
+
+export interface AudioConsentScript {
+  locale: string;
+  consentScript: string;
+  referenceScript: string;
+  minSeconds: number;
+  maxSeconds: number;
+  chirpCloneSupported: boolean;
+}
+
+export interface ClonedVoice {
+  voiceId: string;
+  locale: string;
+  provider: string;
+  consentScript?: string;
+  name?: string;
+  category?: string;
+  minSeconds?: number;
+  maxSeconds?: number;
+}
+
+export interface AudioSynthesizeMetadata {
+  cost: number;
+  billedSeconds: number;
+  creditsPerSecond: number;
+  audioCost: number;
+  textCost: number;
+  durationMs: number;
+  sourceDurationMs: number;
+  speakingRate: number;
+  durationMatch: string;
+  provider: string;
+  voiceId: string;
+  mixedWithBed: boolean;
+  bedMode?: string;
+}
+
+export interface AudioSynthesis {
+  audioBase64: string;
+  mimeType: string;
+  metadata: AudioSynthesizeMetadata;
+  videoBase64?: string;
+  videoMimeType?: string;
+  voiceAudioBase64?: string;
+  voiceVideoBase64?: string;
+  bedAudioBase64?: string;
+}
+
+export interface RemuxedVideo {
+  videoBase64: string;
+  videoMimeType: string;
+}
+
+export interface SynthesizeAudioOptions {
+  language: string;
+  languageCode: string;
+  voiceId: string;
+  segments: Record<string, unknown>[];
+  keepSameLength?: boolean;
+  keepBackgroundMusic?: boolean;
+  stemId?: string;
+  sourceDurationMs?: number;
+  sourceTranscript?: string;
+  videoId?: string;
+  tool?: string;
+}
+
+export interface SubtitleCue {
+  id: string;
+  text: string;
+  startMs: number;
+  endMs: number;
+  begin: string;
+  end: string;
+}
+
+export interface SubtitleParse {
+  durationMs: number;
+  cues: SubtitleCue[];
+}
+
+export interface SubtitlePlaygroundCue {
+  original: string;
+  translated: string;
+  startMs: number;
+  endMs: number;
+  begin?: string;
+  end?: string;
+}
+
+export interface SubtitlePlaygroundLanguage {
+  languageCode: string;
+  language: string;
+  srtUtf8: string;
+  cues: SubtitlePlaygroundCue[];
+}
+
+export interface SubtitlePlayground {
+  durationMs: number;
+  filename: string;
+  sourceCues: Record<string, unknown>[];
+  languages: SubtitlePlaygroundLanguage[];
+  videoId?: string;
+}
+
+export interface LocalizeSubtitlesOptions {
+  subtitle?: FileInput;
+  video?: FileInput;
+  glossary?: FileInput;
+  sourceLanguageCode?: string;
+  context?: string;
+  formality?: string;
+  campaignIds?: number[];
+}
+
+// -----------------------------------------------------------------------
 // Parsing helpers (snake_case API → camelCase SDK)
 // -----------------------------------------------------------------------
 
@@ -341,5 +503,139 @@ export function parseInspection(data: any): CulturalInspection {
   return {
     verdict: data.verdict ?? "SAFE",
     affectedCountries,
+  };
+}
+
+export function parseAudioTranscript(data: any): AudioTranscript {
+  return {
+    transcript: data.transcript ?? "",
+    durationMs: data.duration_ms ?? 0,
+    segments: (data.segments ?? []).map((s: any) => ({
+      id: String(s.id ?? ""),
+      text: s.text ?? "",
+      startMs: s.start_ms ?? 0,
+      endMs: s.end_ms ?? 0,
+    })),
+    provider: data.provider ?? "",
+    estimatedCreditCost: data.estimated_credit_cost ?? 0,
+    billedSeconds: data.billed_seconds ?? 0,
+    detectedLanguage: data.detected_language,
+    stemId: data.stem_id,
+    bedMode: data.bed_mode,
+    videoId: data.video_id,
+    sourceVoiceAudioBase64: data.source_voice_audio_base64,
+  };
+}
+
+export function parseAudioVoices(data: any): AudioVoices {
+  return {
+    provider: data.provider ?? "",
+    voices: (data.voices ?? []).map((v: any) => ({
+      id: v.id ?? "",
+      name: v.name ?? "",
+      gender: v.gender ?? "",
+      locale: v.locale ?? "",
+      accentLabel: v.accent_label ?? "",
+      provider: v.provider ?? "",
+      category: v.category ?? "preset",
+    })),
+  };
+}
+
+export function parseAudioPreview(data: any): AudioPreview {
+  return {
+    audioBase64: data.audio_base64 ?? "",
+    mimeType: data.mime_type ?? "audio/wav",
+    durationMs: data.duration_ms ?? 0,
+    provider: data.provider ?? "",
+    voiceId: data.voice_id ?? "",
+  };
+}
+
+export function parseConsentScript(data: any): AudioConsentScript {
+  return {
+    locale: data.locale ?? "",
+    consentScript: data.consent_script ?? "",
+    referenceScript: data.reference_script ?? "",
+    minSeconds: data.min_seconds ?? 4,
+    maxSeconds: data.max_seconds ?? 15,
+    chirpCloneSupported: data.chirp_clone_supported ?? true,
+  };
+}
+
+export function parseClonedVoice(data: any): ClonedVoice {
+  return {
+    voiceId: data.voice_id ?? "",
+    locale: data.locale ?? "",
+    provider: data.provider ?? "",
+    consentScript: data.consent_script,
+    name: data.name,
+    category: data.category,
+    minSeconds: data.min_seconds,
+    maxSeconds: data.max_seconds,
+  };
+}
+
+export function parseAudioSynthesis(data: any): AudioSynthesis {
+  const meta = data.metadata ?? {};
+  return {
+    audioBase64: data.audio_base64 ?? "",
+    mimeType: data.mime_type ?? "audio/wav",
+    metadata: {
+      cost: meta.cost ?? 0,
+      billedSeconds: meta.billed_seconds ?? 0,
+      creditsPerSecond: meta.credits_per_second ?? 0,
+      audioCost: meta.audio_cost ?? 0,
+      textCost: meta.text_cost ?? 0,
+      durationMs: meta.duration_ms ?? 0,
+      sourceDurationMs: meta.source_duration_ms ?? 0,
+      speakingRate: meta.speaking_rate ?? 0,
+      durationMatch: meta.duration_match ?? "",
+      provider: meta.provider ?? "",
+      voiceId: meta.voice_id ?? "",
+      mixedWithBed: meta.mixed_with_bed ?? false,
+      bedMode: meta.bed_mode,
+    },
+    videoBase64: data.video_base64,
+    videoMimeType: data.video_mime_type,
+    voiceAudioBase64: data.voice_audio_base64,
+    voiceVideoBase64: data.voice_video_base64,
+    bedAudioBase64: data.bed_audio_base64,
+  };
+}
+
+export function parseSubtitleParse(data: any): SubtitleParse {
+  return {
+    durationMs: data.duration_ms ?? 0,
+    cues: (data.cues ?? []).map((c: any) => ({
+      id: String(c.id ?? ""),
+      text: c.text ?? "",
+      startMs: c.start_ms ?? 0,
+      endMs: c.end_ms ?? 0,
+      begin: c.begin ?? "",
+      end: c.end ?? "",
+    })),
+  };
+}
+
+export function parseSubtitlePlayground(data: any): SubtitlePlayground {
+  return {
+    durationMs: data.duration_ms ?? 0,
+    filename: data.filename ?? "",
+    sourceCues: data.source_cues ?? [],
+    videoId: data.video_id,
+    languages: (data.languages ?? []).map((lang: any) => ({
+      languageCode: lang.language_code ?? "",
+      language: lang.language ?? "",
+      srtUtf8: lang.srt_utf8 ?? "",
+      cues: (lang.cues ?? []).map((c: any) => ({
+        original: c.original ?? "",
+        translated: c.translated ?? "",
+        startMs: c.start_ms ?? 0,
+        endMs: c.end_ms ?? 0,
+        begin: c.begin,
+        end: c.end,
+      })),
+    })),
   };
 }

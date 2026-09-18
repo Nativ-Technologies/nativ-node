@@ -487,4 +487,67 @@ describe("Nativ client", () => {
       expect(headers["User-Agent"]).toMatch(/^nativ-node\//);
     });
   });
+
+  describe("audio and subtitles", () => {
+    it("transcribes audio", async () => {
+      globalThis.fetch = mockFetch({
+        transcript: "Hello",
+        duration_ms: 1000,
+        segments: [{ id: "1", text: "Hello", start_ms: 0, end_ms: 1000 }],
+        provider: "gcp",
+        estimated_credit_cost: 5,
+        billed_seconds: 1,
+      });
+      const result = await client().transcribeAudio(Buffer.from("wav"));
+      expect(result.transcript).toBe("Hello");
+      expect(result.segments[0].endMs).toBe(1000);
+    });
+
+    it("lists voices", async () => {
+      globalThis.fetch = mockFetch({
+        provider: "gcp",
+        voices: [
+          {
+            id: "v1",
+            name: "Ada",
+            gender: "female",
+            locale: "en-US",
+            accent_label: "US",
+            provider: "gcp",
+            category: "preset",
+          },
+        ],
+      });
+      const result = await client().listVoices();
+      expect(result.voices[0].id).toBe("v1");
+    });
+
+    it("synthesizes audio", async () => {
+      globalThis.fetch = mockFetch({
+        audio_base64: "AAAA",
+        mime_type: "audio/wav",
+        metadata: {
+          cost: 10,
+          billed_seconds: 1,
+          credits_per_second: 10,
+          audio_cost: 8,
+          text_cost: 2,
+          duration_ms: 900,
+          source_duration_ms: 900,
+          speaking_rate: 1,
+          duration_match: "exact",
+          provider: "gcp",
+          voice_id: "v1",
+        },
+      });
+      const result = await client().synthesizeAudio({
+        language: "French",
+        languageCode: "fr",
+        voiceId: "v1",
+        segments: [{ text: "Bonjour" }],
+      });
+      expect(result.audioBase64).toBe("AAAA");
+      expect(result.metadata.cost).toBe(10);
+    });
+  });
 });

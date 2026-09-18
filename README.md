@@ -84,6 +84,35 @@ for (const issue of result.affectedCountries) {
 }
 ```
 
+### Audio, video, and subtitles
+
+```typescript
+const draft = await client.transcribeAudio("clip.mp4", {
+  keepBackgroundMusic: true,
+});
+const voices = await client.listVoices({ languageCode: "fr" });
+const dub = await client.synthesizeAudio({
+  language: "French",
+  languageCode: "fr",
+  voiceId: voices.voices[0].id,
+  segments: draft.segments.map((s) => ({
+    text: s.text,
+    start_ms: s.startMs,
+    end_ms: s.endMs,
+  })),
+  videoId: draft.videoId,
+  sourceDurationMs: draft.durationMs,
+  stemId: draft.stemId,
+  keepBackgroundMusic: true,
+});
+
+const cues = await client.parseSubtitle("captions.srt");
+const localized = await client.localizeSubtitles(["fr", "de"], {
+  subtitle: "captions.srt",
+});
+console.log(localized.languages[0].srtUtf8);
+```
+
 ### Translation memory
 
 ```typescript
